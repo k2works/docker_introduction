@@ -372,16 +372,6 @@ $ sudo docker rm sleepy_bardeen
 sleepy_bardeen
 ```
 
-## Tips
-### Dockerにつながらない場合
-[no answer from server](https://github.com/dotcloud/docker/issues/3603)  
-以下の作業をしてネームサーバを更新したあとDockerデーモンを再起動する。
-```bash
-$ vagrant provision
-$ vagrant ssh
-$ sudo service docker.io restart
-```
-
 ## <a name="6">Dockerイメージでの作業</a>
 ### ホストのイメージを一覧表示する
 ```bash
@@ -622,6 +612,22 @@ Pushing tag for rev [8a78b9fca8dc] on {https://registry-1.docker.io/v1/repositor
 $ sudo docker rmi training/sinatra
 Untagged: training/sinatra:latest
 ```
+
+## Tips
+### Dockerにつながらない場合
+[no answer from server](https://github.com/dotcloud/docker/issues/3603)  
+以下の作業をしてネームサーバを更新したあとDockerデーモンを再起動する。
+```bash
+$ vagrant provision
+$ vagrant ssh
+$ sudo service docker.io restart
+```
+#### boot2dockerを使っていてconnection refusedになる場合
+MacOS Xの_/etc/resolv.conf_に以下を追加する
+```
+nameserver 8.8.8.8
+```
+
 
 # 参照
 + [Docker](http://www.docker.com/)
