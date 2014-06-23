@@ -18,6 +18,7 @@ Dockerの習得を目的とする。
 + [Docker Hubはじめに](#3)
 + [ドカライズアプリケーション](#4)
 + [コンテナでの作業](#5)
++ [Dockerイメージでの作業](#6)
 + [Tips](#9)
 
 # 詳細
@@ -379,6 +380,247 @@ sleepy_bardeen
 $ vagrant provision
 $ vagrant ssh
 $ sudo service docker.io restart
+```
+
+## <a name="6">Dockerイメージでの作業</a>
+### ホストのイメージを一覧表示する
+```bash
+$ sudo docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+ubuntu              12.10               c5881f11ded9        4 days ago          172.2 MB
+ubuntu              quantal             c5881f11ded9        4 days ago          172.2 MB
+ubuntu              13.04               463ff6be4238        4 days ago          169.4 MB
+ubuntu              raring              463ff6be4238        4 days ago          169.4 MB
+ubuntu              13.10               195eb90b5349        4 days ago          184.7 MB
+ubuntu              saucy               195eb90b5349        4 days ago          184.7 MB
+ubuntu              12.04               ebe4be4dd427        4 days ago          210.6 MB
+ubuntu              precise             ebe4be4dd427        4 days ago          210.6 MB
+ubuntu              14.04               e54ca5efa2e9        4 days ago          276.5 MB
+ubuntu              latest              e54ca5efa2e9        4 days ago          276.5 MB
+ubuntu              trusty              e54ca5efa2e9        4 days ago          276.5 MB
+training/webapp     latest              31fa814ba25a        3 weeks ago         278.8 MB
+ubuntu              10.04               3db9c44f4520        8 weeks ago         183 MB
+ubuntu              lucid               3db9c44f4520        8 weeks ago         183 MB
+```
+このケースでは`ubuntu`イメージは複数にバージョンを保持しているまたそれぞれのバージョンは以下のようにTAGで参照できる。
+```bash
+ubuntu:14.04
+```
+タグで指定されたバージョンのイメージを実行するには以下のようにする。
+```bash
+$ sudo docker run -t -i ubuntu:14.04 /bin/bash
+```
+Ubuntu 12.04のイメージなら
+```bash
+$ sudo docker run -t -i ubuntu:12.04 /bin/bash
+```
+もしタグを指定しない場合は`ubuntu:latest`イメージをデフォルで使います。
+
+### 新しいイメージを取得する
+```bash
+$ sudo docker pull centos
+Pulling repository centos
+0c752394b855: Download complete
+539c0211cd76: Download complete
+511136ea3c5a: Download complete
+34e94e67e63a: Download complete
+```
+それぞれのレイヤーイメージプルダウンされたことが確認できます。そしてダウンロードを待つことなくコンテナを実行できます。
+```bash
+$ sudo docker run -t -i centos /bin/bash
+```
+
+### イメージを探す
+[Docker Hub](https://hub.docker.com/)サイトから検索できます。
+または`docker search`コマンドでイメージを探すことができます。
+```bash
+$ sudo docker search sinatra
+NAME                                   DESCRIPTION                                     STARS     OFFICIAL   TRUSTED
+wiggles/sinatra                                                                        1
+huahuiyang/sinatra                                                                     1
+training/sinatra                                                                       1
+bmorearty/handson-sinatra              handson-ruby + Sinatra for Hands on with D...   0
+・・・
+```
+### イメージをプルする
+```bash
+$ sudo docker pull training/sinatra
+Pulling repository training/sinatra
+f0f4ab557f95: Download complete
+3c59e02ddd1a: Download complete
+511136ea3c5a: Download complete
+5e66087f3ffe: Download complete
+4d26dd3ebc1c: Download complete
+d4010efcfd86: Download complete
+99ec81b80c55: Download complete
+1fd0d1b3b785: Download complete
+08ebafdba908: Download complete
+fbc9a83d93d9: Download complete
+3e76c0a80540: Download complete
+be88c4c27e80: Download complete
+bfab314f3b76: Download complete
+e809f156dc98: Download complete
+ce80548340bb: Download complete
+79e6bf39f993: Download complete
+```
+これでチームは自分たちのコンテナとしてイメージを使うことができるようになります。
+```bash
+$ sudo docker run -t -i training/sinatra /bin/bash
+root@24fb13a7df27:/#
+```
+### 自分用イメージを作る
+プルしたイメージは幾つか変更やアップデートが必要なのでそのままでは使えない。イメージのアップデートと作成には２つの方法があります。
+1. イメージから作ったコンテナをアップデートしてその結果をコミットする。
+1. `Dockerfile`を使って作成する。
+
+### イメージのアップデートとコミット
+```bash
+$ sudo docker run -t -i training/sinatra /bin/bash
+root@8045f93568c8:/# gem install json
+Fetching: json-1.8.1.gem (100%)
+Building native extensions.  This could take a while...
+Successfully installed json-1.8.1
+1 gem installed
+Installing ri documentation for json-1.8.1...
+Installing RDoc documentation for json-1.8.1...
+root@8045f93568c8:/# exit
+exit
+```
+作りたいカスタムコンテナができたので`docker commit`コマンドでコンテナイメージのコピーをコミットします。
+```bash
+$ sudo docker commit -m="Added json gem" -a="k2works" 8045f93568c8 k2works/sinatra:v2
+dd9bd08eba288de838d924517f3c94c42f5d041c4058fdb8d6df549f811995d1
+```
+`-m`フラグはバージョン管理システムのコミットのようにコミットメッセージを特定するオプションです。`-a`フラグは作成者の名前です。
+
+また、新しく作りたいイメージを`8045f93568c8`(先に記録されたID)のコンテナをから指定しイメージのターゲットを特定しています。
+```
+k2works/sinatra:v2
+```
+これは作成したイメージのユーザー`k2works`で構成されています。また、イメージ名も指定しています今回はオリジナルの名前`sinatra`をそのまま使っています。最後に`v2`イメージダグをつけています。
+```bash
+$ sudo docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+k2works/sinatra     v2                  dd9bd08eba28        20 seconds ago      451.1 MB
+・・・
+```
+新しく作成したイメージを使うには以下の操作を実行ます。
+```bash
+
+$ sudo docker run -t -i k2works/sinatra:v2 /bin/bash
+root@1bd21b2cf944:/#
+```
+
+### `Dockerfile`からイメージを作る
+ディレクトリと`Dockerfile`を作成
+```bash
+$ cd /vagrant/
+$ sudo mkdir sinatra
+$ cd sinatra/
+$ sudo touch Dockerfile
+```
+_Dockerfile_を編集
+```
+# This is a comment
+FROM ubuntu:14.04
+MAINTAINER Kate Smith <ksmith@example.com>
+RUN apt-get -qq update
+RUN apt-get -qqy install ruby ruby-dev
+RUN gem install sinatra
+```
+
++ `FROM`はDockerにイメージソースを伝える。
++ `MAINTAINE`はイメージをメンテナンスする人。
++ 'RUN'はイメージ内で実行するコマンド。
+
+続いて`Dockerfile`と`docker build`コマンドを使ってイメージを作ります。
+```bash
+$ sudo docker build -t="k2works/sinatra:v2" .
+Uploading context  2.56 kB
+Uploading context
+Step 0 : FROM ubuntu:14.04
+ ---> e54ca5efa2e9
+Step 1 : MAINTAINER Kate Smith <ksmith@example.com>
+ ---> Running in c79cb06db257
+ ---> 8f7f1a073054
+Step 2 : RUN apt-get -qq update
+ ---> Running in 299e70b68f1c
+ ---> 69fab425df1a
+Step 3 : RUN apt-get -qqy install ruby ruby-dev
+ ---> Running in 2de88d382882
+ ・・・
+ Step 4 : RUN gem install sinatra
+ ---> Running in 41354f79db2c
+unable to convert "\xC3" to UTF-8 in conversion from ASCII-8BIT to UTF-8 to US-ASCII for README.rdoc, skipping
+unable to convert "\xC3" to UTF-8 in conversion from ASCII-8BIT to UTF-8 to US-ASCII for README.rdoc, skipping
+Successfully installed rack-1.5.2
+Successfully installed tilt-1.4.1
+Successfully installed rack-protection-1.5.3
+Successfully installed sinatra-1.4.5
+4 gems installed
+Installing ri documentation for rack-1.5.2...
+Installing ri documentation for tilt-1.4.1...
+Installing ri documentation for rack-protection-1.5.3...
+Installing ri documentation for sinatra-1.4.5...
+Installing RDoc documentation for rack-1.5.2...
+Installing RDoc documentation for tilt-1.4.1...
+Installing RDoc documentation for rack-protection-1.5.3...
+Installing RDoc documentation for sinatra-1.4.5...
+ ---> 8a78b9fca8dc
+Successfully built 8a78b9fca8dc
+Removing intermediate container c79cb06db257
+Removing intermediate container 299e70b68f1c
+Removing intermediate container 2de88d382882
+Removing intermediate container 41354f79db2c
+```
+`-t`フラグで`k2works`ユーザーに属することを指定します。そしてレポジトリ名を`sinatra`でタグを`v2`に指定しています。
+また今回はカレントディレクトリとしてして`.`を指定した`Dockerfile`の場所を別の場所に指定することもできます。
+
+続いて`Dockerfile`で実行されている内容をステップバイステップで見ていきます。各ステップごとに`docker commit`が実行されているように見えます。
+そして最後に`8a78b9fca8dc`イメージが残され残りのイメージが削除されていることが確認できます。
+
+さらにその新しいイメージからコンテナを作ることができます。
+```bash
+$ sudo docker run -t -i k2works/sinatra:v2 /bin/bash
+root@4b12aad7d137:/#
+```
+
+### イメージにタグを付ける
+```bash
+$ sudo docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+k2works/sinatra     v2                  8a78b9fca8dc        16 minutes ago      385.6 MB
+・・・
+$ sudo docker tag 8a78b9fca8dc k2works/sinatra:devel
+$ sudo docker images k2works/sinatra
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+k2works/sinatra     v2                  8a78b9fca8dc        17 minutes ago      385.6 MB
+k2works/sinatra     devel               8a78b9fca8dc        17 minutes ago      385.6 MB
+```
+
+### Docker Hubにプッシュする
+```bash
+$ sudo docker push k2works/sinatra
+The push refers to a repository [k2works/sinatra] (len: 2)
+Sending image list
+Pushing repository k2works/sinatra (2 tags)
+511136ea3c5a: Image already pushed, skipping
+d7ac5e4f1812: Image already pushed, skipping
+2f4b4d6a4a06: Image already pushed, skipping
+83ff768040a0: Image already pushed, skipping
+6c37f792ddac: Image already pushed, skipping
+e54ca5efa2e9: Image already pushed, skipping
+8f7f1a073054: Image successfully pushed
+69fab425df1a: Image successfully pushed
+dfb6dcb9b017: Image successfully pushed
+8a78b9fca8dc: Image successfully pushed
+Pushing tag for rev [8a78b9fca8dc] on {https://registry-1.docker.io/v1/repositories/k2works/sinatra/tags/v2}
+Pushing tag for rev [8a78b9fca8dc] on {https://registry-1.docker.io/v1/repositories/k2works/sinatra/tags/devel}
+```
+### ホストのイメージを削除する
+```bash
+$ sudo docker rmi training/sinatra
+Untagged: training/sinatra:latest
 ```
 
 # 参照
