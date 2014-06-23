@@ -1,6 +1,8 @@
 Docker入門
 ===
 # 目的
+Dockerの習得を目的とする。
+
 # 前提
 | ソフトウェア     | バージョン    | 備考         |
 |:---------------|:-------------|:------------|
@@ -15,6 +17,8 @@ Docker入門
 + [インストール](#2)
 + [Docker Hubはじめに](#3)
 + [ドカライズアプリケーション](#4)
++ [コンテナでの作業](#5)
++ [Tips](#9)
 
 # 詳細
 ## <a name="1">Dockerとは</a>
@@ -213,6 +217,171 @@ CONTAINER ID        IMAGE               COMMAND             CREATED             
 ```
 稼働中のコンテナがなければ正しく停止されています。
 
+## <a name="5">コンテナでの作業</a>
+
+### Dockerクライアントが何ができるか確認
+
+オプション無しで`docker`コマンドを実行すれば実行可能なコマンドが一覧表示されます。
+```bash
+$ sudo docker
+Usage: docker [OPTIONS] COMMAND [arg...]
+ -H=[unix:///var/run/docker.sock]: tcp://host:port to bind/connect to or unix://path/to/socket to use
+
+A self-sufficient runtime for linux containers.
+
+Commands:
+    attach    Attach to a running container
+    build     Build a container from a Dockerfile
+    commit    Create a new image from a container's changes
+    cp        Copy files/folders from the containers filesystem to the host path
+    diff      Inspect changes on a container's filesystem
+    events    Get real time events from the server
+    export    Stream the contents of a container as a tar archive
+    ・・・
+```
+### Dcokerコマンドの使い方を確認する
+さらに特定のコマンドの詳細な使い方を確認することができます。
+```bash
+$ sudo docker attach
+
+Usage: docker attach [OPTIONS] CONTAINER
+
+Attach to a running container
+
+  --no-stdin=false: Do not attach stdin
+  --sig-proxy=true: Proxify all received signal to the process (even in non-tty mode)
+```
+または`--help`オプションでもできます。
+```bash
+$ sudo docker images --help
+
+Usage: docker images [OPTIONS] [NAME]
+
+List images
+
+  -a, --all=false: Show all images (by default filter out the intermediate images used to build)
+  --no-trunc=false: Don't truncate output
+  -q, --quiet=false: Only show numeric IDs
+  -t, --tree=false: Output graph in tree format
+  -v, --viz=false: Output graph in graphviz format
+```
+### DockerでWebアプリケーションを実行する
+```bash
+sudo docker run -d -P training/webapp python app.py
+```
+`-d`フラグはバックグランド実行。`-P`フラグはDcokerに我々のホスト内のコンテナで必要なポートをマッピングするオプション。
+
+`traing/webapp`イメージは予め作成された簡単なPython Flaskアプリケーションです。
+
+最後にコマンドで`python app.py`を指定してコンテナ内で実行させています。これでwebアプリケーションが起動します。
+
+### Webアプリケーションを確認する
+```bash
+$ sudo docker ps -l
+CONTAINER ID        IMAGE                    COMMAND             CREATED             STATUS              PORTS                     NAMES
+177ccc8c5565        training/webapp:latest   python app.py       6 minutes ago       Up 6 minutes        0.0.0.0:49153->5000/tcp   sleepy_bardeen
+```
+`-l`オプションは最後に実行したコンテナの詳細を返します。  
+`docker ps`コマンドは実行中のコンテナだけ表示します。もし停止中のコンテナも表示させたい場合は`-a`フラグを使ってください。
+
+```bash
+PORTS
+0.0.0.0:49155->5000/tcp
+```
+`docker run`コマンドの`-P`フラグは我々のホスト内のイメージに他のポートを割り当てるオプションです。
+このケースではポート5000(Pytho Flaskデフォルトポート)から49155に変更している。
+
+Dockerではネットワークポートの割り当てを柔軟にできます。最後のケースでは`-P`フラグはコンテナ内のポート5000をローカルのDockerホストの上位ポート(49000 - 49900)に割り当てる`-p 5000`にショートカットオプションです。
+また、`-p`フラグを使って特定のポートを指定した以下の様なDockerコンテナを作ることができます。
+```bash
+$ sudo docker run -d -p 5000:5000 training/webapp python app.py
+```
+これはローカルホスト内のポート5000にポート5000を割り当てます。なぜ１対１の割り当てを使わないかというと例えばローカルホスト内の複数のコンテナで同じPythonアプリを実行する場合それぞれにポートが割り当てていないと１つづつしか実行できないからです。
+
+### ネットワークポートショートカット
+```bash
+$ sudo docker port sleepy_bardeen 5000
+0.0.0.0:49153
+```
+このコマンドでポート5000にマッピングされているポート一覧を表示させることができます。
+
+### Webアプリケーションログを確認する
+```
+$ sudo docker logs -f sleepy_bardeen
+ * Running on http://0.0.0.0:5000/
+```
+`-f`フラグで`tail -f`みたいにログが表示できます。
+
+### Webアプリケーションコンテナプロセスを確認する
+```bash
+$ sudo docker top sleepy_bardeen
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                1643                1577                0                   01:18               ?                   00:00:02            python app.py
+```
+
+### Webアプリケーションコンテナを調べる
+```bash
+$ sudo docker inspect sleepy_bardeen
+[{
+    "ID": "177ccc8c556526c62254eed3e994f17387831e0ba8bb7f9bf1aa45681a2f92df",
+    "Created": "2014-06-23T01:18:09.0791517Z",
+    "Path": "python",
+    "Args": [
+        "app.py"
+    ],
+    "Config": {
+        "Hostname": "177ccc8c5565",
+        "Domainname": "",
+        "User": "",
+        "Memory": 0,
+        "MemorySwap": 0,
+        "CpuShares": 0,
+        "AttachStdin": false,
+        "AttachStdout": false,
+        "AttachStderr": false,
+        "PortSpecs": null,
+        "ExposedPorts": {
+            "5000/tcp": {}
+        },
+        ・・・
+```
+また特定の要素を確認することもできます。
+```bash
+$ sudo docker inspect -f '{{ .NetworkSettings.IPAddress }}' sleepy_bardeen
+172.17.0.2
+```
+
+### Webアプリケーションを止める
+```bash
+$ sudo docker stop sleepy_bardeen
+sleepy_bardeen
+```
+
+### Webアプリケーションを再起動する
+```bash
+$ sudo docker start sleepy_bardeen
+sleepy_bardeen
+```
+
+### Webアプリケーションコンテナを削除する
+```bash
+$ sudo docker stop sleepy_bardeen
+sleepy_bardeen
+$ sudo docker rm sleepy_bardeen
+sleepy_bardeen
+```
+
+## Tips
+### Dockerにつながらない場合
+[no answer from server](https://github.com/dotcloud/docker/issues/3603)  
+以下の作業をしてネームサーバを更新したあとDockerデーモンを再起動する。
+```bash
+$ vagrant provision
+$ vagrant ssh
+$ sudo service docker.io restart
+```
+
 # 参照
-+ [docker](http://www.docker.com/)
++ [Docker](http://www.docker.com/)
 + [Documentation](http://docs.docker.com/)
++ [Docker-friendly Vagrant base boxes](https://github.com/phusion/open-vagrant-boxes)
