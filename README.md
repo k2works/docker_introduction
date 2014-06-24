@@ -21,7 +21,8 @@ Dockerの習得を目的とするため[公式サイトのドキュメント](ht
 + [Dockerイメージでの作業](#6)
 + [コンテナをリンクする](#7)
 + [コンテナ内データの管理](#8)
-+ [Tips](#9)
++ [Docker Hubでの作業](#9)
++ [Tips](#10)
 
 # 詳細
 ## <a name="1">Dockerとは</a>
@@ -831,7 +832,69 @@ $ docker run -v /dbdata --name dbdata2 ubuntu
 $ docker run --volumes-from dbdata2 -v $(pwd):/backup busybox tar xvf /backup/backup.tar
 ```
 
-## Tips
+## <a name="9">Docker Hubでの作業</a>
+[Docker Hub](https://hub.docker.com/)はDocker Incが管理するパブリックレジストリです。15000以上の膨大なイメージのコレクションを自分のコンテナとしてダウンロードして使うことができます。
+
+### DockerコマンドとDocker Hub
+Dockerは`docker search`,`pull`,`login`,`push`などのコマンドを通じてDocker Hubサービスのクライアントとして働きます。
+
+### イメージを探す
+イメージを探す
+```bash
+$ docker search centos
+NAME                                            DESCRIPTION                                     STARS     OFFICIAL   AUTOMATED
+centos                                          The official build of CentOS.                   184
+tianon/centos                                   CentOS 5 and 6, created using rinse instea...   23
+・・・
+```
+イメージをダウンロードする
+```bash
+$ docker pull centos
+Pulling repository centos
+0c752394b855: Download complete
+539c0211cd76: Download complete
+511136ea3c5a: Download complete
+34e94e67e63a: Download complete
+```
+### Docker Hubに貢献する
+```bash
+$ docker login
+Username (k2works):
+Login Succeeded
+```
+認証関連はホームディレクトリの`.dockercfg`に保存される。
+
+### Docker Hubにレポジトリをプッシュする
+[Dockerイメージでの作業](#6)参照
+```bash
+$ sudo docker push yourname/newimage
+```
+
+### Docker Hubの機能
++ プラベートレポジトリ
++ 組織とチーム
++ 自動ビルド
++ Webhooks
+
+#### 自動ビルド
+1. [Docker Hubアカウント](https://hub.docker.com/)を作ってログインする
+1. `Link Accounts`メニューからGitHubまたはBitBucketアカウントとリンクする
+1. ビルドしたい`Dockerfile`を含むGitHubまたはBitBucketプロジェクトを選択する
+1. ビルドしたいブランチを選択する(デフォルトは`master`ブランチ)
+1. 自動ビルド名をつける
+1. オプションDockerタグをつける
+1. `Dockerfile`の場所を指定する。デフォルトは`/`
+
+一度自動ビルドを設定したら自動的にビルドがトリガーされるようになります。もしエラーがなければ自動ビルドの結果を[Docker Hub](https://hub.docker.com/)レジストリで確認できます。
+自動ビルドが検知される限りGitHubとBitBucketレポジトリと同期を取る続けます。
+
+もし自動ビルドのステータスを確認したいならば[自動ビルドページ](https://registry.hub.docker.com/builds/)で確認できます。
+
+一度自動ビルドを非活性・削除したなら`docker push`コマンドでプッシュしても自動ビルドは実行されなくなります。たんにGitHub、BitBucketレポジトリのコードを管理するだけになります。
+
+複数の自動ビルドをレポジトリごとに作ることができます。そして特定の`Dockerfile`やGitブランチを指定するように設定します。
+
+## <a name="10">Tips</a>
 ### Dockerにつながらない場合
 [no answer from server](https://github.com/dotcloud/docker/issues/3603)  
 以下の作業をしてネームサーバを更新したあとDockerデーモンを再起動する。
