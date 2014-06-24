@@ -20,6 +20,7 @@ Dockerの習得を目的とするため[公式サイトのドキュメント](ht
 + [コンテナでの作業](#5)
 + [Dockerイメージでの作業](#6)
 + [コンテナをリンクする](#7)
++ [コンテナ内データの管理](#8)
 + [Tips](#9)
 
 # 詳細
@@ -762,6 +763,73 @@ PING db (172.17.0.11): 48 data bytes
 56 bytes from 172.17.0.11: icmp_seq=2 ttl=64 time=0.250 ms
 ```
 ホストエントリーの`172.17.0.5`を使って`db`コンテナと`ping`コマンドで通信できたことが確認できます。
+
+## <a name="8">コンテナ内データの管理</a>
+### データボリューム
+_データボリューム_は[Union File System](http://docs.docker.com/terms/layer/#ufs-def)でバイパスされた１つ以上のコンテナ内の特別に設計されたディレクトリです。
+これはデータの永続化や共有でいくつかの有効な機能を提供します。
++ データボリュームはコンテナ間で共有・再利用ができます。
++ データボリュームの変更はディレクトリを作成します。
++ データボリュームの変更はイメージをアップデートするとき影響を受けない。
++ コンテナが使わなくなるまでボリュームは存在し続けます。
+
+### データボリュームを追加する
+`-v`フラグでデータボリュームを追加できます。また複数のデータボリュームも指定することができます。
+```bash
+$ docker run -d -P --name web -v /webapp training/webapp python app.py
+```
+コンテナ内の`/webapp`に新しいボリュームが作成されます
+
+### ホストディレクトリをデータボリュームとしてマウントする
+```bash
+$ docker run -d -P --name web -v /src/webapp:/opt/webapp training/webapp python app.py
+$ boot2docker ssh
+$ ls /src/
+webapp/
+```
+これでローカルディレクトリの`/src/webapp`にコンテナの`/opt/webapp`ディレクトリをマウントします。
+```bash
+$ docker run -d -P --name web -v /src/webapp:/opt/webapp:ro training/webapp python app.py
+```
+読み込み・書き込み可能設定以外に読み込み専用にする事もできる。
+
+### データボリュームコンテナの作成とマウント
+もしデータをコンテナ間で共有したいまたは非永続コンテナを使いたいならば名前付きデータボリュームコンテナを作ってマウントするのがベストな方法です。
+
+```bash
+$ docker run -d -v /dbdata --name dbdata training/postgres
+```
+`--volumes-from`フラグで他のコンテナ内の`/dbdata`にマウントします。
+```bash
+$ docker run -d --volumes-from dbdata --name db1 training/postgres
+$ docker run -d --volumes-from dbdata --name db2 training/postgres
+$ docker ps
+CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
+df68954185c0        training/postgres:latest   su postgres -c '/usr   2 minutes ago       Up 2 seconds        5432/tcp            db1
+d90f8cc728bf        training/postgres:latest   su postgres -c '/usr   6 minutes ago       Up 4 minutes        5432/tcp            db2
+aee47da7a348        training/postgres:latest   su postgres -c '/usr   7 minutes ago       Up 5 minutes        5432/tcp            dbdata
+````
+`db1`または`db2`コンテナから連結拡張マウントもできます。
+```bash
+$ docker run -d --name db3 --volumes-from db1 training/postgres
+```
+`dbdata`を含むプライマリコンテナまたはサブコンテナの`db1`,`db2`は他のコンテナから参照されなくなるまでは削除することはできません。
+
+### バックアップ、レストアーまたはデータボリュームの移行
+```bash
+$ docker run --volumes-from dbdata -v $(pwd):/backup ubuntu tar cvf /backup/backup.tar /dbdata
+```
+これは`dbdata`コンテナから新しいコンテナを立ち上げてマウントしています。
+まずローカルホストの`/backup`ディレクトリをマウントし`tar`でバックアップしたコンテナ内の`dbdata`ボリュームを`/backup`ディレクトリに`backup.tar`ファイルして保存しています。
+
+以下の操作で同じまたは違うコンテナにレストアすることができる。
+```bash
+$ docker run -v /dbdata --name dbdata2 ubuntu
+```
+そして、新しいコンテナのデータボリュームにバックアップファイルを展開する。
+```bash
+$ docker run --volumes-from dbdata2 -v $(pwd):/backup busybox tar xvf /backup/backup.tar
+```
 
 ## Tips
 ### Dockerにつながらない場合
