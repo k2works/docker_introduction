@@ -1,7 +1,7 @@
 Docker入門
 ===
 # 目的
-Dockerの習得を目的とする。
+Dockerの習得を目的とするため[公式サイトのドキュメント](http://docs.docker.com/)を超訳。
 
 # 前提
 | ソフトウェア     | バージョン    | 備考         |
@@ -19,6 +19,7 @@ Dockerの習得を目的とする。
 + [ドカライズアプリケーション](#4)
 + [コンテナでの作業](#5)
 + [Dockerイメージでの作業](#6)
++ [コンテナをリンクする](#7)
 + [Tips](#9)
 
 # 詳細
@@ -372,16 +373,6 @@ $ sudo docker rm sleepy_bardeen
 sleepy_bardeen
 ```
 
-## Tips
-### Dockerにつながらない場合
-[no answer from server](https://github.com/dotcloud/docker/issues/3603)  
-以下の作業をしてネームサーバを更新したあとDockerデーモンを再起動する。
-```bash
-$ vagrant provision
-$ vagrant ssh
-$ sudo service docker.io restart
-```
-
 ## <a name="6">Dockerイメージでの作業</a>
 ### ホストのイメージを一覧表示する
 ```bash
@@ -622,6 +613,176 @@ Pushing tag for rev [8a78b9fca8dc] on {https://registry-1.docker.io/v1/repositor
 $ sudo docker rmi training/sinatra
 Untagged: training/sinatra:latest
 ```
+
+## <a name="7">コンテナをリンクする</a>
+
+### ネットワークポートマッピングリフレッシャー
+```bash
+$ sudo docker run -d -P training/webapp python app.py
+$ docker ps
+CONTAINER ID        IMAGE                    COMMAND             CREATED             STATUS              PORTS                     NAMES
+79f7862d8e9c        training/webapp:latest   python app.py       10 seconds ago      Up 7 seconds        0.0.0.0:49153->5000/tcp   sad_euclid
+```
+`-P`フラグは自動的に49000から49900の間の上位ポートをランダムに割り当てる。
+
+```bash
+$ docker run -d -p 5000:5000 training/webapp python app.py
+```
+`-p`フラグは特定のポートを割り当てる。
+```bash
+$ sudo docker run -d -p 127.0.0.1:5000:5000 training/webapp python app.py
+```
+`-p`フラグはまた`localhost`といった特定のインターフェースに対応づけることもできる。
+
+```bash
+$ docker run -d -p 127.0.0.1::5000 training/webapp python app.py
+53b95a1b4127a9f8825f9cbe811bf60f1993e90a2673497e3f2922eefb29f708
+$ docker ps
+CONTAINER ID        IMAGE                    COMMAND             CREATED             STATUS              PORTS                       NAMES
+53b95a1b4127        training/webapp:latest   python app.py       10 seconds ago      Up 8 seconds        127.0.0.1:49153->5000/tcp   distracted_davinci
+5838eee2f776        training/webapp:latest   python app.py       4 minutes ago       Up 3 minutes        127.0.0.1:5000->5000/tcp    romantic_fermi
+```
+また、`localhost`上でもポート動的割り当てができる。
+
+```bash
+$ docker run -d -p 127.0.0.1:5000:5000/udp training/webapp python app.py
+$ docker ps
+CONTAINER ID        IMAGE                    COMMAND             CREATED             STATUS              PORTS                                NAMES
+642116e5a966        training/webapp:latest   python app.py       2 minutes ago       Up 7 seconds        5000/tcp, 127.0.0.1:5000->5000/udp   cocky_morse
+```
+また、UDPポートにも割り当てができる。
+
+```bash
+$ docker port distracted_davinci 5000
+127.0.0.1:49153
+```
+`docker port`ショートカットで現在どのポートが割り当てられているか確認できる。
+
+### Dockerコンテナリンキング
+Dockerには複数のコンテナのリンクを許可してそれぞれの情報を共有する機能を持っています。
+Dockerリンキング機能は親コンテナが子コンテナに関する情報を選択できる親子関係を作ることができます。
+
+### コンテナ名
+コンテナ名を指定できる。この機能は２つの利便性を提供します。
+1. webアプリケーションに`web`というように管理しやすくなる。
+1. `web`コンテナが`db`コンテナにリンクするといったようにDockerに参照ポイントを提供する。
+
+`--name`フラグでコンテナに名前をつけることができます。
+```bash
+$ docker run -d -P --name web training/webapp python app.py
+$ docker ps
+CONTAINER ID        IMAGE                    COMMAND             CREATED             STATUS              PORTS                     NAMES
+f03664bf7c6d        training/webapp:latest   python app.py       3 minutes ago       Up About a minute   0.0.0.0:49154->5000/tcp   web
+```
+また、`docker inspect`でコンテナ名を取得できます。
+```bash
+$ docker inspect -f "{{ .Name }}" f03664bf7c6d
+/web
+```
+
+### コンテナリンク
+リンクはコンテナに相互の安全なやりとりを許します。リンクを使うには`--link`フラグを使います。
+
+```bash
+$ docker run -d --name db training/postgres
+$ docker ps
+CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
+235f0a3d463e        training/postgres:latest   su postgres -c '/usr   3 minutes ago       Up About a minute   5432/tcp            db
+```
+まず、`db`の名前でPostgreSQLデータベースのコンテナを作ります。
+```bash
+$ docker run -d -P --name web --link db:db training/webapp python app.py
+```
+続いて`db`にリンクする`web`コンテナを作ります。
+`--link`フラグのフォーマットは以下。
+```
+--link name:alias
+```
+`name`はコンテナ名で`alias`は名前にリンクした別名です。
+
+`docker ps`でコンテナのリンク状況を確認してみましょう。
+```bash
+$ docker ps
+CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS                     NAMES
+97de7cebf622        training/webapp:latest     python app.py          2 minutes ago       Up 24 seconds       0.0.0.0:49154->5000/tcp   web
+235f0a3d463e        training/postgres:latest   su postgres -c '/usr   7 minutes ago       Up 4 minutes        5432/tcp                  db,web/db
+```
+ここで`NAMES`コラムの`db/web`の部分が`web`コンテナが`db`コンテナにリンクされていることを表しています。
+ここでは親の`db`コンテナが子の`web`コンテナにアクセスすることができます。それを実現するためにDockerは外部ポートを開放することなく安全なトンネルを作ります。
+リンクが貼られている限り特別な操作をする必要はありません。Dockerは相互接続情報を以下の方法でやりとりします。
+
++ 環境編集
++ `/etc/host`ファイルの更新
+
+Dockerが最初の設定する環境変数
+```
+$ docker run --rm --name web2 --link db:db training/webapp env
+HOME=/
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HOSTNAME=0ceeec30ad75
+DB_PORT=tcp://172.17.0.11:5432
+DB_PORT_5432_TCP=tcp://172.17.0.11:5432
+DB_PORT_5432_TCP_ADDR=172.17.0.11
+DB_PORT_5432_TCP_PORT=5432
+DB_PORT_5432_TCP_PROTO=tcp
+DB_NAME=/web2/db
+DB_ENV_PG_VERSION=9.3
+```
+それぞれの環境変数は最初に指定した`alias`である`DB`がプリフィックスされています。もし`alias`を`db1`としたなら環境変数は`DB1_`でプリフィックスされます。
+これらの環境変数を`db`コンテナ内のデータベースと接続するための設定に使うことができます。接続は安全です、プライベートかつ`web`コンテナだけとリンクしているから。
+
+加えて、Dockerはリンクしている親コンテナへのエントリーを`/etc/hosts`ファイルに追加します。
+```bash
+$ docker run -t -i --link db:db  training/webapp:latest /bin/bash
+root@49a13556ccef:/opt/webapp# cat /etc/hosts
+172.17.0.26     49a13556ccef
+127.0.0.1       localhost
+::1     localhost ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+172.17.0.11     db
+```
+dbエイリアスで参照されたIPアドレスを確認することができます。
+```bash
+root@49a13556ccef:/opt/webapp# apt-get install -yqq inetutils-ping
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package netbase.
+(Reading database ... 8961 files and directories currently installed.)
+Unpacking netbase (from .../netbase_4.47ubuntu1_all.deb) ...
+Selecting previously unselected package inetutils-ping.
+Unpacking inetutils-ping (from .../inetutils-ping_2%3a1.8-6_amd64.deb) ...
+Setting up netbase (4.47ubuntu1) ...
+Setting up inetutils-ping (2:1.8-6) ...
+root@49a13556ccef:/opt/webapp# ping db
+PING db (172.17.0.11): 48 data bytes
+56 bytes from 172.17.0.11: icmp_seq=0 ttl=64 time=0.197 ms
+56 bytes from 172.17.0.11: icmp_seq=1 ttl=64 time=0.415 ms
+56 bytes from 172.17.0.11: icmp_seq=2 ttl=64 time=0.250 ms
+```
+ホストエントリーの`172.17.0.5`を使って`db`コンテナと`ping`コマンドで通信できたことが確認できます。
+
+## Tips
+### Dockerにつながらない場合
+[no answer from server](https://github.com/dotcloud/docker/issues/3603)  
+以下の作業をしてネームサーバを更新したあとDockerデーモンを再起動する。
+```bash
+$ vagrant provision
+$ vagrant ssh
+$ sudo service docker.io restart
+```
+#### boot2dockerを使っていてconnection refusedになる場合
+ネームサーバ8.8.8.8を[追加](https://ml-wiki.sys.affrc.go.jp/help/settings/dns/client/macosx-leopard)する。
+MacOS Xの_/etc/resolv.conf_に以下が追加されているか確認する。
+```
+nameserver 8.8.8.8
+```
+そして再起動
+```bash
+$ boot2docker restart
+```
+
 
 # 参照
 + [Docker](http://www.docker.com/)
